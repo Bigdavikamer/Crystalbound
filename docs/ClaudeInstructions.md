@@ -4,58 +4,56 @@
 
 You are assisting with the development of Crystalbound, a Roblox adventure RPG.
 
-Your role is to help build a clean, scalable, production-quality Roblox game while respecting the existing architecture and development standards.
+Your goal is to help create a clean, scalable, production-quality Roblox game while respecting the project architecture and standards.
 
-Before modifying code, always understand the project structure and existing systems.
+Never write code before understanding the existing systems.
 
 ---
 
 # Required Reading
 
-Before creating or modifying code, read:
+Before creating or modifying anything, read:
 
-1. ProjectContext.md
-2. Architecture.md
-3. CodingStandards.md
+- docs/ProjectContext.md
+- docs/Architecture.md
+- docs/CodingStandards.md
+- docs/ClaudeInstructions.md
 
-These documents define the identity, structure, and rules of the project.
+These documents define the project rules.
 
 ---
 
-# Core Rules
-
-## Follow Architecture
+# Architecture Rules
 
 Never create random folders or scripts.
 
-Always place code in the correct location.
+Use the correct layer:
+
+Services:
+Gameplay systems.
+
+Managers:
+World objects and collections.
+
+Controllers:
+Client behavior.
+
+Modules:
+Reusable logic.
+
+Config:
+Adjustable data only.
+
+Core:
+Engine foundation only. No gameplay logic.
+
+---
+
+# Development Rules
+
+The repository is the source of truth.
 
 Use:
-
-- Services for gameplay systems
-- Managers for object/world control
-- Controllers for client behavior
-- Modules for reusable logic
-- Config files for adjustable data
-
----
-
-## Do Not Break Existing Systems
-
-Before changing a system:
-
-1. Inspect the current implementation.
-2. Understand dependencies.
-3. Explain potential impacts.
-4. Make the smallest clean change possible.
-
-Avoid rewriting working systems unnecessarily.
-
----
-
-# Roblox Development Rules
-
-Crystalbound uses:
 
 - Roblox Studio
 - Luau
@@ -63,52 +61,136 @@ Crystalbound uses:
 - Git
 - VS Code
 
-The repository is the source of truth.
+Make changes inside the repository and synchronize through Rojo.
 
-Changes should be made inside the repository structure and synchronized through Rojo.
+Do not make the Studio place file the main source of code.
 
 ---
 
 # Code Quality Rules
 
-Always prioritize:
+Prioritize:
 
 - Clean architecture
-- Readable code
-- Modular systems
+- Readability
+- Modularity
 - Performance
 - Maintainability
 
 Avoid:
 
 - Giant scripts
-- Duplicate code
-- Hardcoded values
+- Duplicate systems
+- Random folders
+- Hardcoded gameplay values
 - Unnecessary complexity
 
 ---
 
-# Creating New Systems
+# New System Process
 
-Before creating a new system:
+Before creating a new system, explain:
 
-Explain:
+1. What it does.
+2. Where it belongs.
+3. What systems it interacts with.
 
-1. What the system does.
-2. Why it belongs in that folder.
-3. What other systems it interacts with.
-
-Then implement it.
+Only implement after the plan is understood.
 
 ---
 
 # Data Rules
 
-Gameplay numbers should not be hidden inside scripts.
+Gameplay values must be stored in Config modules.
 
 Examples:
 
-Bad:
+- Drop rates
+- Crystal rarity
+- Item values
+- Equipment stats
+- Mission rewards
 
-```lua
-local chance = 0.05
+Do not hide important balancing values inside gameplay scripts.
+
+---
+
+# Security Rules
+
+Never trust the client.
+
+The server controls:
+
+- Rewards
+- Currency
+- Items
+- Drops
+- Progression
+- Crafting results
+
+The client only requests actions.
+
+---
+
+# Communication Rules
+
+When making changes, always explain:
+
+- What changed.
+- Which files changed.
+- Why the change was needed.
+- Any risks or testing required.
+
+---
+
+# Git Rules
+
+Recommend commits before major changes.
+
+Use clear commit messages.
+
+Examples:
+
+- Add CrystalEngine bootstrap system
+- Implement mining foundation
+- Create inventory framework
+
+---
+
+# Workflow
+
+Follow this order:
+
+1. Understand the request.
+2. Inspect existing code.
+3. Explain the approach.
+4. Implement.
+5. Test.
+6. Summarize.
+
+Do not rush implementation.
+
+---
+
+# Design Philosophy
+
+Crystalbound should be:
+
+- Rewarding
+- Fair
+- Discoverable
+- Expandable
+
+Core loop:
+
+Explore → Mine → Discover → Upgrade → Progress
+
+Every feature should strengthen this loop.
+
+---
+
+# Final Rule
+
+Quality is more important than speed.
+
+Build Crystalbound as a long-term Roblox project with a clean and scalable foundation.
