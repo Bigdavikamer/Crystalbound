@@ -1,0 +1,15 @@
+# Roblox Studio lock files
+*.rbxl.lock
+*.rbxlx.lock
+
+# Windows
+Thumbs.db
+
+# macOS
+.DS_Store
+
+# VS Code settings
+.vscode/
+
+# Logs
+*.log
