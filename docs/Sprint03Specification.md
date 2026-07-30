@@ -944,12 +944,16 @@ ServerScriptService/Managers/
 ├── WorldManager               {}                     world state, current world context
 └── OreManager                 { "WorldManager" }     node state (interface only)
 
-ReplicatedStorage/Shared/
-├── Modules/ItemRegistry.lua       definition lookup + boot validation
-├── Modules/StatResolver.lua       THE stat formula, one implementation
-├── Modules/AffixResolver.lua      roll → value
-├── Modules/WorldRegistry.lua      world definition lookup
-└── Types/ItemTypes.lua            ItemDefinition, ItemInstance, StatBlock
+ReplicatedStorage/Modules/          Architecture.md 190: reusable modules
+├── Registry.lua                    shared registry foundation (5.3)
+├── ItemRegistry.lua                definition lookup + boot validation
+├── StatResolver.lua                THE stat formula, one implementation
+├── AffixResolver.lua               roll → value
+└── WorldRegistry.lua               world definition lookup
+
+ReplicatedStorage/Shared/           Architecture.md 227: shared server/client code
+├── Types/ItemTypes.lua             ItemDefinition, ItemInstance, StatBlock
+└── Utilities/TableUtil.lua         deepCopy, deepFreeze, frozenCopy
 
 ReplicatedStorage/Config/
 ├── Items/                     per-category files + index
