@@ -35,7 +35,10 @@ type ProfileCallback = (Player, Profile) -> ()
 
 -- The schema version this build understands. Bumped together with
 -- DefaultProfile.Version; Initialize asserts the two match.
-local CURRENT_VERSION = 1
+--
+-- v2 (Sprint 03 Phase I): equipment slots hold InstanceIds instead of ItemIds,
+-- and Inventory.Instances exists. Migrations.Steps[1] performs the conversion.
+local CURRENT_VERSION = 2
 
 local MESSAGES = PersistenceConfig.Messages
 
@@ -208,7 +211,14 @@ local function prepareStoredProfile(player: Player, stored: { [any]: any }): Pro
 	local working: { [any]: any } = stored
 
 	if version < CURRENT_VERSION then
-		local ok, migrated, reason = Migrations.run(stored, version, CURRENT_VERSION)
+		local ok, migrated, reason, warnings = Migrations.run(stored, version, CURRENT_VERSION)
+
+		-- Migration steps are pure transformations and never log. They return
+		-- observations, which are surfaced here - including on failure, where
+		-- warnings from completed steps are still diagnostic.
+		for _, warning in warnings do
+			log.Warning("Migration for %s (%d): %s", player.Name, player.UserId, warning)
+		end
 
 		if not ok or migrated == nil then
 			log.Error(

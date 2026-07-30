@@ -19,7 +19,10 @@
 
 local DefaultProfile = {
 	-- Save schema version. Owned exclusively by PlayerDataService.
-	Version = 1,
+	--
+	-- v2 (Sprint 03 Phase I): equipment slots hold InstanceIds instead of
+	-- ItemIds, and Inventory.Instances exists. See Sprint03Specification 15.
+	Version = 2,
 
 	-- Identity and session lifecycle. Written only by PlayerDataService.
 	Profile = {
@@ -27,6 +30,14 @@ local DefaultProfile = {
 		CreatedAt = 0, -- unix seconds, set once on first join
 		LastLoginAt = 0,
 		LastSavedAt = 0,
+
+		-- Allocator for instance IDs. Profile-local counter; IDs are stored as
+		-- strings and never reused within a profile (R-4).
+		--
+		-- Strings matter: DataStore serialisation converts numeric table keys to
+		-- strings on write, so a numeric ID would return as a string and every
+		-- subsequent lookup would silently miss.
+		NextInstanceId = 1,
 	},
 
 	-- Spendable balances only.
@@ -53,24 +64,41 @@ local DefaultProfile = {
 		},
 	},
 
-	-- Capacity and Items only.
-	-- Capacity is the player's OWNED slot count. Effective capacity
-	-- (base + equipment bonuses) is calculated at runtime, never saved.
+	--[[
+		Two storage strategies, chosen by item Category (specification 3.6).
+
+		Items     - stackable and fungible: materials, crystals, consumables.
+		Instances - unique copies: equipment. Each carries its own affix rolls,
+		            evolution state, lock and favourite flags, and Origin.
+
+		Capacity and InstanceCapacity are the player's OWNED slot counts.
+		Effective capacity including equipment and upgrade bonuses is resolved at
+		runtime and never saved.
+	]]
 	Inventory = {
-		Capacity = 50,
+		Capacity = 50, -- distinct stackable ItemIds
 		Items = {}, -- [itemId] = count
+
+		InstanceCapacity = 50, -- unique instances
+		Instances = {}, -- [instanceId] = ItemInstance
 	},
 
-	-- Equipped item IDs only. Stats are NEVER saved - they are read from Config
-	-- by ID and recalculated after every load.
-	--
-	-- Only Pickaxe carries a starting value. The remaining slots - Bracelet,
-	-- Hood, Hat, Mantle - are deliberately absent rather than set to nil, since
-	-- a nil field creates no key. An absent slot means nothing is equipped, and
-	-- validation must never treat that as corruption.
-	Equipment = {
-		Pickaxe = "pickaxe_starter",
-	},
+	--[[
+		Equipped InstanceIds - NOT ItemIds. Changed in v2.
+
+		An equipped instance stays in Inventory.Instances; equipping is a
+		reference, not a move.
+
+		Every slot is deliberately absent rather than set to nil, since a nil
+		field creates no key. An absent slot means nothing is equipped, and
+		validation must never treat that as corruption.
+
+		New profiles start with every slot empty. A starter loadout is gameplay
+		content requiring EquipmentService, which is Phase II - nothing can equip
+		anything yet. Pre-v2 saves carrying "pickaxe_starter" are handled by the
+		v1 to v2 migration, which converts it to a real instance.
+	]]
+	Equipment = {},
 
 	-- What the player has DISCOVERED. Never completion percentages - those are
 	-- calculated against Config's full catalogue at runtime.
