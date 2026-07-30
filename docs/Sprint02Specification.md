@@ -331,6 +331,10 @@ This matches the canonical flow in `Architecture.md`. The server remains authori
 
 `Version` and `Profile` are the only sections `PlayerDataService` writes. Everything else it merely carries.
 
+**Reads are open; writes are owned.** Generalised in Sprint03Specification R-18: a service may read any persisted section it needs for validation, but only the owning service may mutate it. `InventoryService` consults `Equipment` slots to refuse destroying an equipped instance, which requires no dependency on `EquipmentService` and creates no cycle.
+
+**One documented carve-out.** `Profile.NextInstanceId`, added in Sprint 03 Phase I, is written by `InventoryService` rather than `PlayerDataService`. The counter is inventory's instance allocator; `Inventory` would have been the better home for it. Relocating it would cost a permanent v2 to v3 migration for tidiness alone, so the write ownership is documented instead. Move it if a v2 to v3 migration is ever required for another reason.
+
 ---
 
 # 8. Runtime Lifecycle

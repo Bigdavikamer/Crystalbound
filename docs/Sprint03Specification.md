@@ -545,6 +545,33 @@ Implementation rule: **validate everything, build the result in memory, then app
 
 This is a correctness requirement, not an optimisation.
 
+## 6.6 The mutation funnel
+
+Every write to `Inventory.Items` or `Inventory.Instances` passes through one private function. Public methods validate and *describe* the change they want; they never touch the profile.
+
+```
+applyMutations(player, mutations) -> (ok, reasonCode?, changes?)
+
+  Phase 1  VALIDATE   invariants checked against a projection; nothing is written
+  Phase 2  APPLY      mutate, collecting change descriptors while data still exists
+  Phase 3  NOTIFY     fire observers, only once state is consistent
+```
+
+**This ordering is a standing architectural pattern for every transactional system** - crafting, salvage, loot application - and not an InventoryService detail. Three properties follow from it:
+
+**Atomicity.** Because Phase 1 writes nothing, a batch that fails on its third entry leaves the profile untouched. That is what makes multi-item operations all-or-nothing without any rollback machinery.
+
+**Observers never see partial state.** Notification is deferred to Phase 3, so a subscriber cannot read an inventory mid-batch.
+
+**One place for cross-cutting concerns.** Dirty flags, replication, analytics and last-line invariant checks all attach here rather than to each public method.
+
+The funnel takes a **list** even when every current caller passes one entry. Salvage and crafting will pass several, and the transactional guarantee belongs in one place rather than in each of them.
+
+Two rules that make the pattern hold:
+
+- **Everything the mutation needs must be allocated inside Phase 2.** InventoryService's instance-ID allocator originally ran before the funnel, so a rejected mutation would still have advanced the counter - a write outside the transaction boundary. Allocation belongs inside the apply phase.
+- **Invariant failures are bugs, not player errors.** Public methods own player-facing validation and return specific codes. Anything reaching the funnel malformed is a programming error, so it logs at Error and returns a distinct `InvariantViolation` code.
+
 ---
 
 # 7. Equipment System
@@ -1040,6 +1067,8 @@ Approved and settled. Recorded here as the standing position.
 | **R-15** | **Registries are strictly read-only** (5.2.1). Entries are deep frozen. No stat resolution, evolution, loot generation, affix resolution, equipment calculation, instance handling, or player state. |
 | **R-16** | **All registries follow one pattern** (5.3), with mechanics shared in `Modules/Registry.lua`. Future registries supply a validator and their sources; nothing else. |
 | **R-17** | **Migration steps are pure transformations.** A step returns `(profile, warnings?)` and never logs. `PlayerDataService` logs the warnings after the migration completes, including on failure. Supersedes the `(profile) -> profile` signature in Sprint02Specification 11.1. |
+| **R-18** | **Services may read any persisted profile data when necessary for validation, but only the owning service may mutate that section.** Ownership is defined by write authority, not read exclusivity. This generalises the per-section table in Sprint02Specification 7.3 into a principle, replacing the need for case-by-case exceptions - it is what lets `InventoryService` consult `Equipment` slots to refuse destroying an equipped instance without depending on `EquipmentService`. |
+| **R-19** | **Transactional systems follow validate → apply → notify** (6.6). One private mutation path per owned dataset. Phase 1 writes nothing, so failures are atomic; notification is deferred to Phase 3, so observers never see partially applied state. Applies to crafting, salvage and loot application, not only inventory. |
 
 ## 16.2 Open
 
