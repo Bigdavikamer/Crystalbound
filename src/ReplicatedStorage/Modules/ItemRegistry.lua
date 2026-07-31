@@ -67,13 +67,26 @@ local CATEGORIES: { [string]: boolean } = {
 	Cosmetic = true,
 }
 
-local SLOTS: { [string]: boolean } = {
-	Pickaxe = true,
-	Bracelet = true,
-	Hood = true,
-	Hat = true,
-	Mantle = true,
-}
+--[[
+	The canonical runtime slot taxonomy.
+
+	Ordered, because iteration order determines log output and any future UI
+	ordering, and a stable order makes diagnostics reproducible.
+
+	Every service consumes ItemRegistry.SLOTS rather than keeping a copy. This
+	registry already owns the taxonomy - it is what validates Definition.Slot -
+	so exposing it here is the same justification as RARITY_ORDER: taxonomy the
+	registry owns, not gameplay logic (R-15).
+
+	Migrations deliberately keeps its own frozen V1_SLOTS. A migration must
+	describe the schema as it WAS, and must never track a list that changes.
+]]
+local SLOT_ORDER: { string } = { "Pickaxe", "Bracelet", "Hood", "Hat", "Mantle" }
+
+local SLOTS: { [string]: boolean } = {}
+for _, slot in SLOT_ORDER do
+	SLOTS[slot] = true
+end
 
 local RARITY_ORDER: { string } = { "Common", "Uncommon", "Rare", "Epic", "Legendary" }
 
@@ -247,6 +260,13 @@ local handle = Registry.build({
 local ItemRegistry = {}
 
 ItemRegistry.RARITY_ORDER = table.freeze(RARITY_ORDER)
+
+-- The single runtime slot taxonomy. Iterate this rather than writing a copy.
+ItemRegistry.SLOTS = table.freeze(SLOT_ORDER)
+
+function ItemRegistry.isSlot(name: string): boolean
+	return SLOTS[name] == true
+end
 
 --// Lookup //-----------------------------------------------------------------
 

@@ -596,17 +596,30 @@ An equipped instance remains in `Instances`. Equipping is a **reference**, not a
 **Approved: one shared `StatResolver`.** A Shared module used by both server and client, so resolved stats never cross the wire and there is exactly one implementation of the formula.
 
 ```
-1. Sum base stats from every equipped instance's Definition
-2. Add flat affix contributions:      Min + (Max - Min) * Roll   where Mode = "Flat"
-3. Sum percent affix contributions:   same formula               where Mode = "Percent"
-4. Apply evolution multiplier per instance (Config, by Stage)
-5. Add Progression.Upgrades contributions (Config, by level)
-6. Combine:   final = (base + flatTotal) * (1 + percentTotal)
+per stat key k:
+
+  1. flat    = StatKeys[k].Default
+  2. flat   += sum over equipped instances of
+                  BaseStats[k] * evolutionMultiplier(instance)
+  3. flat   += flat affix contributions      Min + (Max - Min) * Roll
+     percent += percent affix contributions  same formula
+  4. flat   += Flat modifiers supplied in the context
+     percent += Percent modifiers supplied in the context
+  5. value   = flat * (1 + percent)
+  6. value   = clamp(value, StatKeys[k].Min, StatKeys[k].Max)
 ```
 
-**Step 6 is the single canonical formula and must exist in exactly one place.** Additive-before-multiplicative versus per-source multiplication produce wildly different balance, and two implementations drifting is a bug class that is nearly undiagnosable from player reports.
+**Step 5 is the single canonical combination and must exist in exactly one place.** Additive-before-multiplicative versus per-source multiplication produce wildly different balance, and two implementations drifting is a bug class that is nearly undiagnosable from player reports.
 
-Resolved blocks are cached per player and invalidated on equip, unequip, evolve, upgrade, or profile load. Never persisted.
+`Default` participating in the flat term is what lets one formula serve every stat: `MiningPower` starts at 0 and accumulates, `MiningSpeed` starts at 1 so a `+0.2` flat and a `+10%` modifier resolve to `(1 + 0.2) * 1.1 = 1.32`.
+
+**Evolution scales flat contributions only** (II-6). Scaling percent contributions as well compounds multiplicatively in a way that is very hard to balance.
+
+**`Progression.Upgrades` is NOT read here.** An earlier revision of this pipeline had `StatResolver` reading it directly. That contradicted II-2 - the resolver may depend on read-only Config registries, never on Service-owned state - and II-4, which names the accessor `getEquipmentStats` precisely because upgrades and buffs are not equipment.
+
+Upgrades, buffs, debuffs, world modifiers and event bonuses all arrive the same way: as **normalised `StatModifier`s supplied by whichever service owns them**, in step 4. That keeps one rule rather than a rule plus an exception, and it is why adding a new contribution source needs no change to `StatResolver` at all.
+
+Resolved blocks are cached per player by `EquipmentService`, never by `StatResolver`, and never persisted.
 
 ## 7.3 Stat keys
 
@@ -1073,6 +1086,10 @@ Approved and settled. Recorded here as the standing position.
 | **R-17** | **Migration steps are pure transformations.** A step returns `(profile, warnings?)` and never logs. `PlayerDataService` logs the warnings after the migration completes, including on failure. Supersedes the `(profile) -> profile` signature in Sprint02Specification 11.1. |
 | **R-18** | **Services may read any persisted profile data when necessary for validation, but only the owning service may mutate that section.** Ownership is defined by write authority, not read exclusivity. This generalises the per-section table in Sprint02Specification 7.3 into a principle, replacing the need for case-by-case exceptions - it is what lets `InventoryService` consult `Equipment` slots to refuse destroying an equipped instance without depending on `EquipmentService`. |
 | **R-19** | **Transactional systems follow validate → apply → notify** (6.6). One private mutation path per owned dataset. Phase 1 writes nothing, so failures are atomic; notification is deferred to Phase 3, so observers never see partially applied state. Applies to crafting, salvage and loot application, not only inventory. |
+| **R-20** | **Every system validates the objects it produces; downstream consumers assume trusted inputs.** See 16.3. |
+| **R-21** | **Derived-state caches invalidate wholly, never incrementally.** An incremental cache must model every dependency correctly forever; a whole-entry cache only has to know *that* something changed. Correctness and simplicity outweigh micro-optimising recomputation. Applies to every cache, not only equipment stats. |
+| **R-22** | **Cached accessors return ephemeral snapshots.** A cached table is valid at the moment of the call and must be consumed immediately, never retained across a change - invalidation drops the entry rather than mutating the table a caller holds, so a retained reference goes silently stale. The corresponding change event is the signal to re-read. |
+| **R-23** | **Prefer the owner's API over a raw profile-section read when one exists.** A refinement of R-18: raw reads are for cases where no API exists, or where calling one would create a dependency cycle - which is exactly why `InventoryService` reads `Equipment` slots directly rather than calling `EquipmentService:isEquipped`. |
 
 ## 16.2 Open
 
@@ -1091,6 +1108,39 @@ Each has a recommendation. None is settled, and none blocks approval of this spe
 | **O-9** | Track discovered affixes and recipe hints? | **Affixes yes**; hints only if secrets ship in the same phase |
 | **O-10** | Quantise affix rolls on the wire? | **Defer** until Remotes are designed |
 | **O-11** | Localisation layer for `Display` text? | **Defer**, with the caveat that extracting it later touches every Config file |
+
+## 16.3 Validation ownership (R-20)
+
+> **Every system validates the objects it produces. Downstream consumers assume trusted inputs.**
+
+Validation belongs at the boundary where an object is **constructed**, not where it is used.
+
+A malformed object arriving at a consumer is a bug in its producer, and the consumer is the worst possible place to diagnose it: it can report that something was wrong, but not *who sent it* or *which line built it*. Detecting a typo at the point of construction gives a stack trace at the mistake, in the system that owns it.
+
+### Corollaries
+
+**A consumer discovering bad input should not start validating.** The producer gets fixed. Adding a check downstream duplicates the rule and hides the real fault.
+
+**Ownership of validation follows ownership of construction.** A consumer must not provide a constructor for the objects it consumes, even one that validates - that inverts the ownership this rule exists to establish, and forces every producer into a dependency on its consumer. `StatResolver` deliberately provides no modifier constructor for exactly this reason.
+
+**Defence-in-depth at an ownership boundary is compatible.** `InventoryService`'s mutation funnel re-checks invariants even though its public methods already validate. That does not contradict R-20 because it treats failure as a *producer bug*: it logs at Error and returns a distinct `InvariantViolation` code, rather than silently coping.
+
+### The client is never a trusted producer
+
+**R-20 governs server-internal boundaries only.**
+
+Every value crossing a Remote is validated server-side regardless of what any client-side system claims to have checked. A client-supplied instanceId, count, or recipe selection is a **claim**, never a fact. Nothing in this rule softens the security position in `ClaudeInstructions.md`, and R-20 must never be cited to justify trusting a payload.
+
+### Where the rule already holds
+
+| Producer boundary | Validates |
+|---|---|
+| `ItemRegistry` | Every item definition, at boot |
+| `SystemLoader` | Every service module's shape, at load |
+| `ProfileValidator` | Profile schema, at load |
+| `InventoryService.createInstance` | Options and item kind, at construction |
+| `Migrations.run` | That each step advanced `Version` |
+| `StatResolver` | Nothing - a trusted consumer by design |
 
 ---
 
